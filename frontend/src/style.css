@@ -1,0 +1,92 @@
+:root {
+  --bg: #f5f7f7;
+  --surface: #ffffff;
+  --text: #18212a;
+  --muted: #65727f;
+  --line: #d8e0df;
+  --line-strong: #b6c4c2;
+  --green: #167862;
+  --blue: #2467a3;
+  --amber: #a56818;
+  --red: #af3f4a;
+  --shadow: 0 18px 44px rgba(18, 34, 47, 0.12);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.4;
+  overflow: hidden;
+}
+button, input, select, textarea { font: inherit; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.app {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr) 372px;
+  grid-template-rows: 60px minmax(0, 1fr);
+}
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 22px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.brand h1 { margin: 0; font-size: 18px; white-space: nowrap; }
+.brand span { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mode-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.mode-toggle button { border: 0; background: #fff; color: var(--muted); padding: 7px 16px; cursor: pointer; font-weight: 600; }
+.mode-toggle button.active { background: var(--green); color: #fff; }
+
+/* Videos mode: drop the side panels, give the explorer the full width. */
+.app.mode-videos { grid-template-columns: minmax(0, 1fr); }
+.stats { display: flex; gap: 8px; flex-wrap: wrap; }
+.stat { min-width: 72px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fbfcfc; }
+.stat strong { display: block; font-size: 14px; }
+.stat span { display: block; color: var(--muted); font-size: 11px; }
+
+.sidebar, .detailbar { min-height: 0; overflow: auto; background: var(--surface); padding: 14px; display: grid; gap: 12px; align-content: start; }
+.sidebar { border-right: 1px solid var(--line); }
+.detailbar { border-left: 1px solid var(--line); }
+.main { min-width: 0; min-height: 0; padding: 14px; }
+.panel { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 13px; }
+.panel h2 { margin: 0 0 10px; font-size: 14px; }
+
+.graph-shell { height: 100%; min-height: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; display: grid; grid-template-rows: 42px minmax(0, 1fr); }
+.graph-bar { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid var(--line); background: #fbfcfc; }
+.graph-bar strong { font-size: 13px; }
+.graph-bar .muted { font-size: 12px; }
+.graph-area { min-height: 0; position: relative; }
+
+.legend { display: grid; gap: 7px; font-size: 12px; color: var(--muted); }
+.legend-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; margin-right: 7px; }
+
+.status { min-height: 16px; color: var(--muted); font-size: 12px; white-space: pre-wrap; }
+.status.error { color: var(--red); }
+.toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); background: rgba(16,20,23,.9); color: #fff; padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 5; }
+
+@media (max-width: 1180px) {
+  .app { grid-template-columns: 280px minmax(0, 1fr); }
+  .detailbar { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); grid-template-columns: 1fr 1fr; max-height: 46vh; }
+  .main { min-height: 560px; }
+}
+@media (max-width: 760px) {
+  body { overflow: auto; }
+  .app { display: block; height: auto; }
+  .sidebar, .detailbar, .main { width: 100%; max-width: 100vw; }
+  .main { height: 70vh; }
+  .detailbar { grid-template-columns: 1fr; }
+}

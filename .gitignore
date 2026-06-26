@@ -28,6 +28,10 @@ output/
 # Logs
 *.log
 
+# Frontend (npm / Vite)
+frontend/node_modules/
+frontend/scripts/*.png
+
 # OS
 .DS_Store
 Thumbs.db

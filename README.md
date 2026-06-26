@@ -16,20 +16,53 @@
 
 ## 快速开始
 
+后端用 [uv](https://docs.astral.sh/uv/) 管理依赖，前端用 npm（Vite + Vue + Cytoscape.js）。
+
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# 后端：安装依赖、初始化数据库
+uv sync
+uv run python -m video_hunter init-db
 
-python -m video_hunter init-db
-uvicorn video_hunter.app:app --reload --port 8000
+# 灌入一份演示图谱（几十~几百账号 + 视频，用于先跑通可视化）
+uv run python -m video_hunter seed-demo --accounts 80 --videos 120
+
+# 前端：开发模式（Vite dev server，:5173，自动代理 /api 到 :8000）
+cd frontend
+npm install
+npm run dev
 ```
 
-打开：
+开发时打开 Vite 提示的地址（通常 `http://127.0.0.1:5173`）。后端 API 仍由 uvicorn 提供：
 
-```text
-http://127.0.0.1:8000
+```bash
+uv run uvicorn video_hunter.app:app --reload --port 8000
 ```
+
+生产单端口部署（后端托管前端构建产物）：
+
+```bash
+cd frontend && npm run build && cd ..   # 产出 frontend/dist
+uv run uvicorn video_hunter.app:app --port 8000
+# 打开 http://127.0.0.1:8000
+```
+
+如果要分析视频尺寸、时长和关键帧，请安装 `ffmpeg`：
+
+```bash
+brew install ffmpeg
+```
+
+## 知识图谱可视化
+
+打开 Web 界面即可看到「X 书签作者知识图谱」：节点是账号（颜色表示原创性标签，大小表示度数/视频量），边是账号间的关系（关注 / 转发 / 书签作者）。图谱用 Cytoscape.js 渲染（Canvas + fcose 布局），几百到上千节点都能流畅交互：
+
+- 关系类型筛选、隐藏孤立节点、节点搜索
+- 布局切换（力导向 / 同心圆 / 环形 / 网格）
+- 点击节点高亮其邻居、淡化其余，右侧弹出作者详情、关系和视频
+- 悬停浮现标签、核心大节点常驻标签（密集图也可读）
+- 「同步采集数据」一键把书签/时间线/原创性报告同步进图谱
+
+数据写入同一个 SQLite 库，采集流程（`crawl-once` / `import-x-bookmarks` / `audit-*` / `sync-x-graph`）和图谱共享一份数据，UI 的同步按钮调用的就是同一套 ingest 函数。
 
 如果要分析视频尺寸、时长和关键帧，请安装 `ffmpeg`：
 
@@ -126,21 +159,25 @@ cp .env.example .env
 ## 目录结构
 
 ```text
-video_hunter/
-  app.py                 # FastAPI API 和基础网页 UI
-  __main__.py            # CLI
-  db.py                  # SQLite schema 和数据访问
-  ingest.py              # 采集、下载、分析、去重、聚类总管线
-  analyzer.py            # ffprobe/ffmpeg/SHA-256/关键帧 hash
-  dedup.py               # 内容组去重
-  clustering.py          # 轻量主题聚类
-  connectors/
-    direct.py            # 直接视频 URL
-    webpage.py           # 普通网页视频发现
-    porn91.py            # 91porn 页面/详情页视频发现
-    x_api.py             # X/Twitter 官方 API
-  importers/
-    x_bookmarks.py       # Chrome X bookmarks JSON 导入
+video_hunter/                # 后端（uv 管理）
+  app.py                     # FastAPI API + 托管前端构建产物
+  __main__.py                # CLI
+  db.py                      # SQLite schema 和数据访问（含账号图谱查询）
+  ingest.py                  # 采集、下载、分析、去重、聚类总管线
+  analyzer.py                # ffprobe/ffmpeg/SHA-256/关键帧 hash
+  dedup.py                   # 内容组去重
+  clustering.py              # 轻量主题聚类
+  seed.py                    # 演示图谱样例数据生成
+  connectors/                # 各平台采集连接器
+  importers/                 # X bookmarks / follow graph / 图谱同步
+  audit/x_originality.py     # 原创性信号审计
+frontend/                    # 前端（npm 管理，Vite + Vue3 + TS + Cytoscape.js）
+  src/
+    App.vue                  # 三栏布局与状态编排
+    api.ts / types.ts        # 类型化 API 客户端
+    graph/                   # Cytoscape 样式与布局预设
+    components/              # GraphCanvas / ControlsPanel / DetailPanel
+  scripts/verify-graph.mjs   # 无头回归验证（Playwright）
 ```
 
 ## 需要你后续提供的信息

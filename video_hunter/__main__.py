@@ -12,6 +12,7 @@ from video_hunter.importers.x_bookmarks import import_x_bookmarks
 from video_hunter.importers.x_follow_graph import import_x_follow_graph
 from video_hunter.importers.x_graph import sync_x_graph_from_files
 from video_hunter.ingest import crawl_all, crawl_source, rebuild_indexes
+from video_hunter.seed import seed_demo
 from video_hunter.x_media import resolve_and_download_x_videos
 
 
@@ -56,6 +57,12 @@ def main() -> None:
     download_x.add_argument("--no-download", action="store_true", help="Resolve MP4 URLs without downloading files")
 
     subparsers.add_parser("rebuild")
+
+    seed = subparsers.add_parser("seed-demo")
+    seed.add_argument("--accounts", type=int, default=60)
+    seed.add_argument("--communities", type=int, default=5)
+    seed.add_argument("--videos", type=int, default=120)
+    seed.add_argument("--seed", type=int, default=7)
 
     args = parser.parse_args()
     db.init_db()
@@ -103,6 +110,13 @@ def main() -> None:
         pprint(asdict(result))
     elif args.command == "rebuild":
         pprint(rebuild_indexes())
+    elif args.command == "seed-demo":
+        pprint(asdict(seed_demo(
+            accounts=args.accounts,
+            communities=args.communities,
+            videos=args.videos,
+            seed=args.seed,
+        )))
 
 
 if __name__ == "__main__":

@@ -6,7 +6,8 @@ from typing import Any, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from video_hunter import __version__, db
@@ -16,8 +17,12 @@ from video_hunter.importers.x_follow_graph import import_x_follow_graph
 from video_hunter.importers.x_graph import sync_x_graph_from_files
 from video_hunter.ingest import crawl_all, crawl_source, rebuild_indexes
 from video_hunter.x_media import resolve_and_download_x_videos
-from video_hunter.ui import PREVIEW_HTML
 
+# Built frontend lives in frontend/dist (run `npm run build` there). In dev the
+# Vite server (npm run dev) proxies /api here, so this static mount only matters
+# for production-style single-port serving.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
 
 app = FastAPI(title="video-hunter", version=__version__)
 db.init_db()
@@ -64,9 +69,20 @@ def startup() -> None:
     db.init_db()
 
 
-@app.get("/", response_class=HTMLResponse)
-def index() -> str:
-    return PREVIEW_HTML
+@app.get("/")
+def index():
+    """Serve the built SPA. The UI is entirely in frontend/; this only returns
+    a plain-text hint when the bundle hasn't been built yet (dev mode uses the
+    Vite server directly)."""
+    index_html = FRONTEND_DIST / "index.html"
+    if index_html.exists():
+        return FileResponse(index_html)
+    return PlainTextResponse(
+        "video-hunter API 正在运行，但前端尚未构建。\n"
+        "开发：cd frontend && npm install && npm run dev（打开 Vite 提示的 :5173）\n"
+        "生产：cd frontend && npm run build，之后刷新本页面。\n"
+        "API 文档：/docs",
+    )
 
 
 @app.get("/api/health")
@@ -311,329 +327,8 @@ def _refresh_91porn_media_url(source_url: str) -> str | None:
         return None
 
 
-DASHBOARD_HTML = """
-<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>video-hunter</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --bg: #f7f7f5;
-      --panel: #ffffff;
-      --text: #1f2933;
-      --muted: #697386;
-      --line: #d8dee4;
-      --accent: #1665d8;
-      --danger: #b42318;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.45;
-    }
-    header {
-      padding: 24px 32px 14px;
-      border-bottom: 1px solid var(--line);
-      background: var(--panel);
-    }
-    h1 { margin: 0; font-size: 24px; }
-    main {
-      display: grid;
-      grid-template-columns: minmax(280px, 380px) 1fr;
-      gap: 18px;
-      padding: 18px 32px 32px;
-    }
-    section {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 16px;
-    }
-    h2 {
-      margin: 0 0 12px;
-      font-size: 16px;
-    }
-    label {
-      display: block;
-      margin: 10px 0 5px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-    input, select {
-      width: 100%;
-      padding: 9px 10px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      font-size: 14px;
-      background: #fff;
-    }
-    button {
-      border: 1px solid #0f56bd;
-      border-radius: 6px;
-      background: var(--accent);
-      color: #fff;
-      padding: 9px 12px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button.secondary {
-      border-color: var(--line);
-      background: #fff;
-      color: var(--text);
-    }
-    .actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-    }
-    .stack { display: grid; gap: 18px; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    th, td {
-      padding: 9px 8px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-    }
-    th { color: var(--muted); font-weight: 600; }
-    code {
-      background: #f0f3f6;
-      border-radius: 4px;
-      padding: 1px 4px;
-      word-break: break-all;
-    }
-    .muted { color: var(--muted); }
-    .error { color: var(--danger); white-space: pre-wrap; }
-    .status {
-      min-height: 22px;
-      margin-top: 12px;
-      color: var(--muted);
-      font-size: 13px;
-      white-space: pre-wrap;
-    }
-    @media (max-width: 900px) {
-      main { grid-template-columns: 1fr; padding: 14px; }
-      header { padding: 18px 14px 12px; }
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>video-hunter</h1>
-    <div class="muted">白名单视频源采集、去重、聚类和最早来源追踪</div>
-  </header>
-  <main>
-    <div class="stack">
-      <section>
-        <h2>添加采集源</h2>
-        <label>平台</label>
-        <select id="platform">
-          <option value="webpage">webpage</option>
-          <option value="direct">direct</option>
-          <option value="x">x</option>
-          <option value="91porn">91porn</option>
-        </select>
-        <label>类型</label>
-        <input id="targetType" value="page" />
-        <label>目标</label>
-        <input id="targetValue" placeholder="网页 URL / 视频 URL / X username" />
-        <div class="actions">
-          <button onclick="addSource()">添加</button>
-          <button class="secondary" onclick="crawlAll()">抓取全部</button>
-          <button class="secondary" onclick="rebuild()">重建分组</button>
-        </div>
-        <div id="status" class="status"></div>
-      </section>
-      <section>
-        <h2>采集源</h2>
-        <div id="sources"></div>
-      </section>
-    </div>
-    <div class="stack">
-      <section>
-        <h2>内容组与最早来源</h2>
-        <div id="groups"></div>
-      </section>
-      <section>
-        <h2>视频</h2>
-        <div id="videos"></div>
-      </section>
-      <section>
-        <h2>主题聚类</h2>
-        <div id="clusters"></div>
-      </section>
-    </div>
-  </main>
-  <script>
-    async function request(path, options) {
-      const response = await fetch(path, options);
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text);
-      }
-      return response.json();
-    }
+# Production: serve the built SPA. Mounted LAST so every /api/* route above
+# takes precedence; StaticFiles(html=True) returns dist/index.html for "/".
+if FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
-    function setStatus(value, isError = false) {
-      const node = document.getElementById("status");
-      node.textContent = value;
-      node.className = isError ? "status error" : "status";
-    }
-
-    async function addSource() {
-      try {
-        const payload = {
-          platform: document.getElementById("platform").value,
-          target_type: document.getElementById("targetType").value,
-          target_value: document.getElementById("targetValue").value,
-          crawl_interval_seconds: 3600,
-          enabled: true
-        };
-        const result = await request("/api/sources", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(payload)
-        });
-        setStatus(`已添加 source #${result.id}`);
-        await loadAll();
-      } catch (error) {
-        setStatus(error.message, true);
-      }
-    }
-
-    async function crawlSource(id) {
-      try {
-        setStatus(`正在抓取 source #${id} ...`);
-        const result = await request(`/api/crawl/${id}`, {method: "POST"});
-        setStatus(JSON.stringify(result, null, 2));
-        await loadAll();
-      } catch (error) {
-        setStatus(error.message, true);
-      }
-    }
-
-    async function crawlAll() {
-      try {
-        setStatus("正在抓取全部 enabled sources ...");
-        const result = await request("/api/crawl-all", {method: "POST"});
-        setStatus(JSON.stringify(result, null, 2));
-        await loadAll();
-      } catch (error) {
-        setStatus(error.message, true);
-      }
-    }
-
-    async function rebuild() {
-      const result = await request("/api/rebuild", {method: "POST"});
-      setStatus(JSON.stringify(result, null, 2));
-      await loadAll();
-    }
-
-    async function loadAll() {
-      const [sources, groups, videos, clusters] = await Promise.all([
-        request("/api/sources"),
-        request("/api/groups"),
-        request("/api/videos"),
-        request("/api/clusters")
-      ]);
-      renderSources(sources);
-      renderGroups(groups);
-      renderVideos(videos);
-      renderClusters(clusters);
-    }
-
-    function renderSources(items) {
-      document.getElementById("sources").innerHTML = table(
-        ["ID", "平台", "类型", "目标", "上次抓取", ""],
-        items.map(item => [
-          item.id,
-          item.platform,
-          item.target_type,
-          code(item.target_value),
-          item.last_crawled_at || "",
-          `<button class="secondary" onclick="crawlSource(${item.id})">抓取</button>`
-        ])
-      );
-    }
-
-    function renderGroups(items) {
-      document.getElementById("groups").innerHTML = table(
-        ["ID", "重复数", "标题", "最早平台", "发布时间", "证据 URL"],
-        items.map(item => [
-          item.id,
-          item.duplicate_count,
-          escapeHtml(item.canonical_title || ""),
-          item.earliest_platform || "",
-          item.earliest_published_at || item.earliest_first_seen_at || "",
-          link(item.earliest_source_url)
-        ])
-      );
-    }
-
-    function renderVideos(items) {
-      document.getElementById("videos").innerHTML = table(
-        ["ID", "状态", "标题", "平台", "发布时间", "主题"],
-        items.map(item => [
-          item.id,
-          item.status,
-          escapeHtml(item.title || ""),
-          item.platform || "",
-          item.published_at || "",
-          escapeHtml(item.topic_label || "")
-        ])
-      );
-    }
-
-    function renderClusters(items) {
-      document.getElementById("clusters").innerHTML = table(
-        ["ID", "标签", "视频数", "关键词"],
-        items.map(item => [
-          item.id,
-          escapeHtml(item.label || ""),
-          item.video_count,
-          escapeHtml((item.keywords || []).join(", "))
-        ])
-      );
-    }
-
-    function table(headers, rows) {
-      if (!rows.length) return `<div class="muted">暂无数据</div>`;
-      return `<table><thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
-        rows.map(row => `<tr>${row.map(cell => `<td>${cell ?? ""}</td>`).join("")}</tr>`).join("") +
-        `</tbody></table>`;
-    }
-
-    function code(value) {
-      return `<code>${escapeHtml(value || "")}</code>`;
-    }
-
-    function link(value) {
-      if (!value) return "";
-      const safe = escapeHtml(value);
-      return `<a href="${safe}" target="_blank" rel="noreferrer">${safe}</a>`;
-    }
-
-    function escapeHtml(value) {
-      return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }
-
-    loadAll().catch(error => setStatus(error.message, true));
-  </script>
-</body>
-</html>
-"""
