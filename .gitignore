@@ -1,0 +1,33 @@
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Type-check / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local runtime data & databases
+data/
+output/
+*.sqlite3
+*.sqlite3-*
+
+# Secrets / local config
+.env
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
